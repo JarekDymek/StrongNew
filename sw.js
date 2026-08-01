@@ -1,4 +1,4 @@
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const SOURCE_COMMIT = '298be6317c4ac3c3d61b5862ab556691e0eaa24d';
 const SOURCE_BASE = `https://raw.githubusercontent.com/JarekDymek/StrongNextGen/${SOURCE_COMMIT}/`;
 const SHELL_CACHE = `strongnew-shell-${VERSION}`;
@@ -28,8 +28,11 @@ const scopeUrl = path => new URL(path, self.registration.scope).href;
 const cacheKey = path => new Request(scopeUrl(path), { method: 'GET' });
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(SHELL_FILES)));
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    await cache.addAll(SHELL_FILES.map(path => new Request(path, { cache: 'reload' })));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {
@@ -56,7 +59,7 @@ async function downloadRemote(path) {
     let body = await response.text();
     body = body
       .replaceAll('Strongman Next', 'StrongNew')
-      .replaceAll('strongman-next-v0.3.0', 'strongnew-v0.3.0');
+      .replaceAll('strongman-next-v0.3.0', 'strongnew-v0.3.1');
     return new Response(body, {
       status: 200,
       headers: {
@@ -118,6 +121,10 @@ async function cacheApplication() {
 }
 
 self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   if (event.data?.type !== 'CACHE_APP') return;
   event.waitUntil(cacheApplication().catch(async error => {
     await notify({ type: 'CACHE_ERROR', message: error?.message || String(error) });
@@ -127,7 +134,7 @@ self.addEventListener('message', event => {
 function localPath(url) {
   const scope = new URL(self.registration.scope);
   const pathname = new URL(url).pathname;
-  return decodeURIComponent(pathname.slice(scope.pathname.length));
+  return decodeURIComponent(pathname.slice(scope.pathname.length)).replace(/^\/+/, '');
 }
 
 async function serveRemotePath(path) {
@@ -140,8 +147,8 @@ async function serveRemotePath(path) {
     await cache.put(key, response.clone());
     return response;
   } catch {
-    if (path.endsWith('.css')) return new Response('', { headers: { 'Content-Type': 'text/css' } });
-    if (path.endsWith('.js')) return new Response(`throw new Error('Brak pliku offline: ${path}')`, { headers: { 'Content-Type': 'text/javascript' } });
+    if (path.endsWith('.css')) return new Response('', { headers: { 'Content-Type': 'text/css; charset=utf-8' } });
+    if (path.endsWith('.js')) return new Response(`throw new Error('Brak pliku offline: ${path}')`, { status: 503, headers: { 'Content-Type': 'text/javascript; charset=utf-8' } });
     return new Response('Brak zasobu offline', { status: 503 });
   }
 }
@@ -150,7 +157,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  const path = localPath(url.href).replace(/^\/+/, '');
+  const path = localPath(url.href);
 
   if (REMOTE_FILES.includes(path)) {
     event.respondWith(serveRemotePath(path));
@@ -166,7 +173,12 @@ self.addEventListener('fetch', event => {
       if (response.ok) await shell.put(event.request, response.clone());
       return response;
     } catch {
-      if (event.request.mode === 'navigate') return shell.match('./index.html');
+      if (event.request.mode === 'navigate') {
+        const fallback = path.startsWith('app.html')
+          ? await shell.match('./app.html')
+          : await shell.match('./index.html');
+        if (fallback) return fallback;
+      }
       return new Response('Offline', { status: 503 });
     }
   })());
