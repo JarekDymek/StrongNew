@@ -8,6 +8,8 @@ on:
       - .github/workflows/bootstrap-and-deploy.yml
   issues:
     types: [opened]
+  pull_request_target:
+    types: [opened]
 
 permissions:
   contents: write
@@ -20,13 +22,17 @@ concurrency:
 
 jobs:
   bootstrap:
-    if: github.event_name != 'issues' || github.event.issue.title == 'BOOTSTRAP_STRONGNEW'
+    if: >-
+      (github.event_name != 'issues' || github.event.issue.title == 'BOOTSTRAP_STRONGNEW') &&
+      (github.event_name != 'pull_request_target' || github.event.pull_request.title == 'BOOTSTRAP_STRONGNEW')
     runs-on: ubuntu-latest
     outputs:
       skip: ${{ steps.gate.outputs.skip }}
     steps:
-      - name: Checkout StrongNew
+      - name: Checkout StrongNew main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Check bootstrap state
         id: gate
