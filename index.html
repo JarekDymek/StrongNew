@@ -64,8 +64,10 @@
   let deferredPrompt = null;
   let registration = null;
 
-  const isAndroid = /android/i.test(navigator.userAgent);
-  const isChrome = /chrome|crios/i.test(navigator.userAgent) && !/edg|opr|samsungbrowser/i.test(navigator.userAgent);
+  const userAgent = navigator.userAgent || '';
+  const isAndroid = /android/i.test(userAgent);
+  const isWebView = /\bwv\b|;\s*wv\)|version\/4\.0.*chrome|chatgpt|fban|fbav|instagram/i.test(userAgent);
+  const isChrome = /chrome|crios/i.test(userAgent) && !isWebView && !/edg|opr|samsungbrowser/i.test(userAgent);
   const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const setStatus = (text, mode='') => { status.textContent = text; status.className = `status ${mode}`.trim(); };
 
