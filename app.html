@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" href="icon-192.png">
-  <link rel="stylesheet" href="src/styles.css?v=0.3.0">
+  <link rel="stylesheet" href="src/styles.css?v=0.3.1">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -20,8 +20,15 @@
       <strong>Ładowanie StrongNew…</strong>
     </div>
   </div>
-  <script type="module" src="src/state-migration.js?v=0.3.0"></script>
-  <script type="module" src="src/runtime.js?v=0.3.0"></script>
-  <script type="module" src="src/app.js?v=0.3.0"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
+        .then(registration => registration.update())
+        .catch(error => console.error('Błąd service workera:', error));
+    }
+  </script>
+  <script type="module" src="src/state-migration.js?v=0.3.1"></script>
+  <script type="module" src="src/runtime.js?v=0.3.1"></script>
+  <script type="module" src="src/app.js?v=0.3.1"></script>
 </body>
 </html>
