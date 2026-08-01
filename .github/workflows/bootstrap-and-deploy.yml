@@ -1,0 +1,153 @@
+name: Bootstrap and deploy StrongNew
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/bootstrap-and-deploy.yml
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: strongnew-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.gate.outputs.skip }}
+    steps:
+      - name: Checkout StrongNew
+        uses: actions/checkout@v4
+
+      - name: Check bootstrap state
+        id: gate
+        shell: bash
+        run: |
+          if [[ -f .bootstrap-complete ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clone verified source branch
+        if: steps.gate.outputs.skip != 'true'
+        shell: bash
+        run: |
+          git clone --depth 1 \
+            --branch agent/multi-events-profiles-tie-order \
+            https://github.com/JarekDymek/StrongNextGen.git \
+            "$RUNNER_TEMP/StrongNextGen"
+
+      - name: Copy complete application
+        if: steps.gate.outputs.skip != 'true'
+        shell: bash
+        run: |
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            "$RUNNER_TEMP/StrongNextGen/" "$GITHUB_WORKSPACE/"
+
+          grep -RIl --exclude-dir=.git --exclude='*.png' --exclude='*.jpg' --exclude='*.jpeg' \
+            'Strongman Next' . | xargs -r sed -i 's/Strongman Next/StrongNew/g'
+          grep -RIl --exclude-dir=.git \
+            'https://jarekdymek.github.io/StrongNextGen/' . | \
+            xargs -r sed -i 's#https://jarekdymek.github.io/StrongNextGen/#https://jarekdymek.github.io/StrongNew/#g'
+
+          sed -i 's#<title>[^<]*</title>#<title>StrongNew</title>#' index.html
+          sed -i 's/strongman-next-v0.3.0/strongnew-v0.3.0/g' sw.js
+
+          cat > manifest.json <<'JSON'
+          {
+            "id": "./",
+            "name": "StrongNew — sędziowanie Strong Man i Strong Women",
+            "short_name": "StrongNew",
+            "description": "Mobilna aplikacja PWA do prowadzenia i sędziowania zawodów Strong Man i Strong Women.",
+            "lang": "pl",
+            "start_url": "./",
+            "scope": "./",
+            "display": "standalone",
+            "orientation": "any",
+            "background_color": "#0b1f36",
+            "theme_color": "#0b1f36",
+            "icons": [
+              {
+                "src": "assets/icon-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              {
+                "src": "assets/icon-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+              }
+            ]
+          }
+          JSON
+
+          touch .nojekyll
+          printf 'StrongNew bootstrap completed from StrongNextGen commit 298be6317c4ac3c3d61b5862ab556691e0eaa24d\n' > .bootstrap-complete
+
+      - name: Validate application
+        if: steps.gate.outputs.skip != 'true'
+        run: npm test
+
+      - name: Commit imported application
+        if: steps.gate.outputs.skip != 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Bootstrap StrongNew PWA from StrongNextGen"
+          git push origin main
+
+      - name: Configure GitHub Pages
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Prepare static Pages artifact
+        if: steps.gate.outputs.skip != 'true'
+        shell: bash
+        run: |
+          SITE="$RUNNER_TEMP/site"
+          mkdir -p "$SITE"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='tests/' \
+            --exclude='scripts/' \
+            --exclude='package.json' \
+            --exclude='README.md' \
+            --exclude='.bootstrap-complete' \
+            ./ "$SITE/"
+
+      - name: Upload Pages artifact
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    if: needs.bootstrap.outputs.skip != 'true'
+    needs: bootstrap
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
