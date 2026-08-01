@@ -1,4 +1,4 @@
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const SOURCE_COMMIT = '298be6317c4ac3c3d61b5862ab556691e0eaa24d';
 const SOURCE_BASE = `https://raw.githubusercontent.com/JarekDymek/StrongNextGen/${SOURCE_COMMIT}/`;
 const SHELL_CACHE = `strongnew-shell-${VERSION}`;
