@@ -45,12 +45,12 @@
   <p class="lead">Instalacja pełnej aplikacji PWA — bez tworzenia skrótu do przeglądarki.</p>
   <div id="status" class="status">Sprawdzam manifest, service worker i tryb instalacji…</div>
   <div class="actions">
-    <button id="installApp" class="secondary" disabled>Oczekiwanie na potwierdzenie Chrome…</button>
+    <button id="installApp" class="secondary">Sprawdź i zainstaluj StrongNew</button>
     <a id="openChrome" class="button chrome" hidden>Otwórz w Chrome</a>
     <button id="openApp" class="primary" disabled>Uruchom bez instalowania</button>
     <button id="retry" class="ghost" hidden>Sprawdź ponownie</button>
   </div>
-  <p id="hint" class="details">Przycisk instalacji zostanie odblokowany wyłącznie po potwierdzeniu przez Chrome, że jest to instalowalna aplikacja PWA.</p>
+  <p id="hint" class="details">Pierwsze dotknięcie uruchamia kontrolę Chrome. Właściwy instalator zostanie pokazany wyłącznie po potwierdzeniu, że StrongNew jest pełną aplikacją PWA.</p>
   <details><summary>Diagnostyka</summary><pre id="diagnostics"></pre></details>
 </main>
 <script>
@@ -70,12 +70,14 @@
   const isChrome = /chrome/i.test(ua) && !isWebView && !/edg|opr|samsungbrowser/i.test(ua);
   const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   let registration = null;
-  let timeoutId = null;
+  let countdownId = null;
+  let verificationReady = false;
+  let verificationPromise = null;
 
   const setStatus = (text, mode='') => { status.textContent = text; status.className = `status ${mode}`.trim(); };
   const refreshDiagnostics = () => {
     diagnostics.textContent = JSON.stringify({
-      version: '0.4.0',
+      version: '0.4.1',
       secureContext: window.isSecureContext,
       serviceWorkerSupported: 'serviceWorker' in navigator,
       serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
@@ -87,11 +89,11 @@
 
   function enableRealInstall() {
     if (!window.__strongNewInstallPrompt || standalone()) return;
-    clearTimeout(timeoutId);
+    clearInterval(countdownId);
     installApp.disabled = false;
     installApp.textContent = 'Zainstaluj StrongNew';
-    setStatus('Chrome potwierdził: aplikacja jest instalowalną PWA.', 'ready');
-    hint.textContent = 'Po zatwierdzeniu instalacji StrongNew uruchomi się bez paska adresu, w trybie aplikacji.';
+    setStatus('Chrome potwierdził: StrongNew jest instalowalną aplikacją PWA.', 'ready');
+    hint.textContent = 'Naciśnij przycisk ponownie. Pojawi się systemowe okno instalacji Chrome, nie opcja tworzenia skrótu.';
     refreshDiagnostics();
   }
 
@@ -119,8 +121,6 @@
 
   async function verify() {
     retry.hidden = true;
-    installApp.disabled = true;
-    installApp.textContent = 'Oczekiwanie na potwierdzenie Chrome…';
     registration = await window.__strongNewSw;
     await registration.update();
     registration = await navigator.serviceWorker.ready;
@@ -130,7 +130,7 @@
       if (!reloaded) {
         sessionStorage.setItem('strongnew-sw-reloaded', '1');
         await new Promise(resolve => {
-          const timer = setTimeout(resolve, 1500);
+          const timer = setTimeout(resolve, 1800);
           navigator.serviceWorker.addEventListener('controllerchange', () => { clearTimeout(timer); resolve(); }, { once: true });
         });
         location.reload();
@@ -138,6 +138,7 @@
       }
     }
 
+    verificationReady = true;
     openApp.disabled = false;
     refreshDiagnostics();
     if (window.__strongNewInstallPrompt) {
@@ -145,19 +146,56 @@
       return;
     }
 
-    setStatus('Service worker i tryb offline są aktywne. Czekam na kontrolę instalowalności Chrome…');
-    timeoutId = setTimeout(() => {
-      if (window.__strongNewInstallPrompt || standalone()) return;
-      installApp.disabled = true;
-      installApp.textContent = 'Chrome nie potwierdził instalacji';
-      retry.hidden = false;
-      setStatus('Chrome nie zgłosił aplikacji jako instalowalnej. Instalacja została zablokowana, aby nie utworzyć zwykłego skrótu.', 'error');
-      hint.textContent = 'Otwórz stronę bezpośrednio w aktualnym Chrome i naciśnij „Sprawdź ponownie”.';
-      refreshDiagnostics();
-    }, 10000);
+    if (!(isAndroid && !isChrome)) {
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź i zainstaluj StrongNew';
+      setStatus('Tryb offline jest gotowy. Naciśnij przycisk, aby Chrome rozpoczął kontrolę instalacji.', 'ready');
+    }
   }
 
-  installApp.addEventListener('click', async () => {
+  async function beginInstallCheck() {
+    if (standalone()) return;
+    if (isAndroid && !isChrome) {
+      location.href = CHROME_INTENT;
+      return;
+    }
+
+    if (!verificationReady) {
+      installApp.disabled = true;
+      installApp.textContent = 'Kończę przygotowanie offline…';
+      await verificationPromise;
+    }
+
+    if (window.__strongNewInstallPrompt) {
+      await showRealInstallPrompt();
+      return;
+    }
+
+    clearInterval(countdownId);
+    let remaining = 40;
+    installApp.disabled = true;
+    installApp.textContent = `Chrome sprawdza aplikację… ${remaining} s`;
+    setStatus('Trwa kontrola instalowalności Chrome. Pozostań na tej stronie; pierwsze dotknięcie spełnia wymaganie interakcji użytkownika.');
+    hint.textContent = 'Przycisk instalacji zostanie odblokowany tylko po odebraniu prawdziwego zdarzenia beforeinstallprompt.';
+    countdownId = setInterval(() => {
+      if (window.__strongNewInstallPrompt) {
+        enableRealInstall();
+        return;
+      }
+      remaining -= 1;
+      installApp.textContent = `Chrome sprawdza aplikację… ${remaining} s`;
+      if (remaining > 0) return;
+      clearInterval(countdownId);
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź ponownie';
+      retry.hidden = false;
+      setStatus('Chrome nie zwrócił systemowego instalatora PWA. Instalacja pozostaje zablokowana, aby nie utworzyć zwykłego skrótu.', 'error');
+      hint.textContent = 'Sprawdź, czy strona jest otwarta w aktualnym Google Chrome i czy wcześniejsza wersja StrongNew nie jest już zainstalowana.';
+      refreshDiagnostics();
+    }, 1000);
+  }
+
+  async function showRealInstallPrompt() {
     const prompt = window.__strongNewInstallPrompt;
     if (!prompt) return;
     installApp.disabled = true;
@@ -166,11 +204,14 @@
     const choice = await prompt.userChoice;
     window.__strongNewInstallPrompt = null;
     if (choice.outcome !== 'accepted') {
-      installApp.textContent = 'Instalacja anulowana';
-      setStatus('Instalacja została anulowana w oknie Chrome.', 'error');
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź ponownie';
+      setStatus('Instalacja została anulowana w systemowym oknie Chrome.', 'error');
     }
     refreshDiagnostics();
-  });
+  }
+
+  installApp.addEventListener('click', () => beginInstallCheck().catch(fail));
 
   openApp.addEventListener('click', () => location.href = './app.html');
   retry.addEventListener('click', () => verify().catch(fail));
@@ -182,7 +223,10 @@
   }
 
   refreshDiagnostics();
-  verify().catch(fail);
+  verificationPromise = verify().catch(error => {
+    fail(error);
+    throw error;
+  });
 })();
 </script>
 </body>
