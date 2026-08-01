@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1f36">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StrongNew">
+  <title>StrongNew — instalacja</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f8fafc;background:#071626;color-scheme:dark}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at top,#173e68,#071626 62%)}
+    main{width:min(620px,100%);border:1px solid rgba(255,255,255,.18);border-radius:26px;padding:clamp(22px,5vw,42px);background:rgba(11,31,54,.94);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+    .logo{width:104px;height:104px;border-radius:24px;display:block;margin:0 auto 18px;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+    h1{margin:0;text-align:center;font-size:clamp(2rem,8vw,3.5rem);letter-spacing:-.04em}p{line-height:1.55;color:#dbeafe}.lead{text-align:center;font-size:1.08rem}
+    .status{margin:24px 0 12px;padding:16px;border-radius:16px;background:#102f50;border:1px solid rgba(147,197,253,.32);font-weight:750}
+    progress{width:100%;height:14px;accent-color:#f24a18}.actions{display:grid;gap:12px;margin-top:22px}
+    button,a.button{min-height:54px;border:0;border-radius:15px;padding:14px 18px;font:inherit;font-weight:850;text-align:center;text-decoration:none;cursor:pointer}
+    .primary{background:#f24a18;color:#fff}.secondary{background:#e2e8f0;color:#0b1f36}.ghost{background:transparent;color:#dbeafe;border:1px solid rgba(255,255,255,.25)}
+    button:disabled{opacity:.45;cursor:not-allowed}.details{font-size:.9rem;color:#a8c7e6;margin-top:18px}.error{background:#511b1b;border-color:#ef4444}.ready{background:#0b3d2c;border-color:#34d399}
+  </style>
+</head>
+<body>
+<main>
+  <img class="logo" src="icon-192.png" alt="StrongNew">
+  <h1>StrongNew</h1>
+  <p class="lead">Aplikacja PWA do sędziowania zawodów Strong Man i Strong Women.</p>
+  <div id="status" class="status">Przygotowanie instalatora…</div>
+  <progress id="progress" max="11" value="0" hidden></progress>
+  <div class="actions">
+    <button id="openApp" class="primary" disabled>Uruchom aplikację</button>
+    <button id="installApp" class="secondary" disabled>Zainstaluj aplikację</button>
+    <button id="retry" class="ghost" hidden>Ponów pobieranie</button>
+  </div>
+  <p id="hint" class="details">Pierwsze uruchomienie wymaga internetu. Po zapisaniu plików aplikacja działa offline.</p>
+</main>
+<script>
+(() => {
+  const status = document.querySelector('#status');
+  const progress = document.querySelector('#progress');
+  const openApp = document.querySelector('#openApp');
+  const installApp = document.querySelector('#installApp');
+  const retry = document.querySelector('#retry');
+  const hint = document.querySelector('#hint');
+  let deferredPrompt = null;
+  let registration = null;
+
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const setStatus = (text, mode='') => { status.textContent = text; status.className = `status ${mode}`.trim(); };
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferredPrompt = event;
+    installApp.disabled = !openApp.disabled ? false : true;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    installApp.textContent = 'Aplikacja zainstalowana';
+    installApp.disabled = true;
+    hint.textContent = 'StrongNew jest dostępny z ekranu głównego i działa offline.';
+  });
+
+  navigator.serviceWorker?.addEventListener('message', event => {
+    const data = event.data || {};
+    if (data.type === 'CACHE_PROGRESS') {
+      progress.hidden = false;
+      progress.max = data.total || 11;
+      progress.value = data.loaded || 0;
+      setStatus(`Zapisywanie plików offline: ${data.loaded}/${data.total} — ${data.path || ''}`);
+    }
+    if (data.type === 'CACHE_READY') {
+      progress.value = progress.max;
+      setStatus('Aplikacja jest gotowa i zapisana do pracy offline.', 'ready');
+      openApp.disabled = false;
+      installApp.disabled = standalone() ? true : !deferredPrompt;
+      installApp.textContent = standalone() ? 'Aplikacja zainstalowana' : 'Zainstaluj aplikację';
+      retry.hidden = true;
+      hint.textContent = standalone()
+        ? 'Uruchom StrongNew. Internet nie jest już wymagany.'
+        : 'Najpierw możesz uruchomić aplikację albo zainstalować ją na ekranie głównym.';
+    }
+    if (data.type === 'CACHE_ERROR') {
+      setStatus(`Nie udało się zapisać plików: ${data.message}`, 'error');
+      retry.hidden = false;
+      progress.hidden = true;
+    }
+  });
+
+  async function requestCache() {
+    setStatus('Łączenie z zatwierdzoną wersją aplikacji…');
+    retry.hidden = true;
+    const worker = registration?.active || registration?.waiting || registration?.installing || navigator.serviceWorker.controller;
+    if (!worker) throw new Error('Service worker nie jest aktywny.');
+    worker.postMessage({ type: 'CACHE_APP' });
+  }
+
+  async function init() {
+    if (!('serviceWorker' in navigator)) throw new Error('Ta przeglądarka nie obsługuje aplikacji PWA.');
+    registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    registration = await navigator.serviceWorker.ready;
+    await requestCache();
+  }
+
+  openApp.addEventListener('click', () => location.href = './app.html');
+  retry.addEventListener('click', () => requestCache().catch(error => {
+    setStatus(error.message, 'error'); retry.hidden = false;
+  }));
+  installApp.addEventListener('click', async () => {
+    if (standalone()) return;
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installApp.disabled = true;
+      return;
+    }
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    hint.textContent = isIOS
+      ? 'W Safari wybierz Udostępnij, następnie „Do ekranu początkowego”.'
+      : 'W menu przeglądarki wybierz „Zainstaluj aplikację” albo „Dodaj do ekranu głównego”.';
+  });
+
+  init().catch(error => {
+    setStatus(error.message, 'error'); retry.hidden = false;
+  });
+})();
+</script>
+</body>
+</html>
