@@ -73,15 +73,17 @@
   let countdownId = null;
   let verificationReady = false;
   let verificationPromise = null;
+  let activeWorkerVersion = '';
 
   const setStatus = (text, mode='') => { status.textContent = text; status.className = `status ${mode}`.trim(); };
   const refreshDiagnostics = () => {
     diagnostics.textContent = JSON.stringify({
-      version: '0.4.1',
+      version: '0.4.2',
       secureContext: window.isSecureContext,
       serviceWorkerSupported: 'serviceWorker' in navigator,
       serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
       installEventSeen: window.__strongNewInstallEventSeen,
+      activeWorkerVersion,
       displayMode: standalone() ? 'standalone' : 'browser',
       userAgent: ua
     }, null, 2);
@@ -119,6 +121,36 @@
     hint.textContent = 'Naciśnij „Otwórz w Chrome”. Nie wybieraj opcji tworzącej zwykły skrót.';
   }
 
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function queryWorkerVersion(timeout = 350) {
+    const worker = navigator.serviceWorker.controller || registration?.active;
+    if (!worker) return '';
+    return new Promise(resolve => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => resolve(''), timeout);
+      channel.port1.onmessage = event => {
+        clearTimeout(timer);
+        resolve(String(event.data?.version || ''));
+      };
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    });
+  }
+
+  async function ensureCurrentWorker() {
+    const expected = '0.4.2';
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      activeWorkerVersion = await queryWorkerVersion();
+      refreshDiagnostics();
+      if (activeWorkerVersion === expected) return;
+      registration = await navigator.serviceWorker.getRegistration('./') || registration;
+      if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      if (attempt % 8 === 0) await registration?.update();
+      await delay(250);
+    }
+    throw new Error(`Aktywny service worker ma wersję ${activeWorkerVersion || 'nieznaną'}, oczekiwano 0.4.2.`);
+  }
+
   async function verify() {
     retry.hidden = true;
     registration = await window.__strongNewSw;
@@ -138,6 +170,7 @@
       }
     }
 
+    await ensureCurrentWorker();
     verificationReady = true;
     openApp.disabled = false;
     refreshDiagnostics();
