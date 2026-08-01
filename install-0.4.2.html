@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1f36">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StrongNew">
+  <title>StrongNew — instalacja PWA</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script>
+    window.__strongNewInstallPrompt = null;
+    window.__strongNewInstallEventSeen = false;
+    window.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault();
+      window.__strongNewInstallPrompt = event;
+      window.__strongNewInstallEventSeen = true;
+      window.dispatchEvent(new Event('strongnew-install-ready'));
+    });
+    window.__strongNewSw = 'serviceWorker' in navigator
+      ? navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
+      : Promise.reject(new Error('Brak obsługi service workera'));
+  </script>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f8fafc;background:#071626;color-scheme:dark}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at top,#173e68,#071626 62%)}
+    main{width:min(620px,100%);border:1px solid rgba(255,255,255,.18);border-radius:26px;padding:clamp(22px,5vw,42px);background:rgba(11,31,54,.96);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+    .logo{width:104px;height:104px;border-radius:24px;display:block;margin:0 auto 18px;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+    h1{margin:0;text-align:center;font-size:clamp(2rem,8vw,3.5rem);letter-spacing:-.04em}p{line-height:1.55;color:#dbeafe}.lead{text-align:center;font-size:1.08rem}
+    .status{margin:24px 0 12px;padding:16px;border-radius:16px;background:#102f50;border:1px solid rgba(147,197,253,.32);font-weight:750}
+    .actions{display:grid;gap:12px;margin-top:22px}button,a.button{min-height:54px;border:0;border-radius:15px;padding:14px 18px;font:inherit;font-weight:850;text-align:center;text-decoration:none;cursor:pointer}
+    .primary{background:#f24a18;color:#fff}.secondary{background:#e2e8f0;color:#0b1f36}.chrome{background:#fff;color:#1f2937}.ghost{background:transparent;color:#dbeafe;border:1px solid rgba(255,255,255,.25)}
+    button:disabled{opacity:.45;cursor:not-allowed}.details{font-size:.92rem;color:#a8c7e6;margin-top:18px}.error{background:#511b1b;border-color:#ef4444}.ready{background:#0b3d2c;border-color:#34d399}.installed{background:#173b2e;border-color:#6ee7b7}
+    details{margin-top:18px;font-size:.86rem;color:#9fc4e8}code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+<main>
+  <img class="logo" src="icon-192.png" alt="StrongNew">
+  <h1>StrongNew</h1>
+  <p class="lead">Instalacja pełnej aplikacji PWA — bez tworzenia skrótu do przeglądarki.</p>
+  <div id="status" class="status">Sprawdzam manifest, service worker i tryb instalacji…</div>
+  <div class="actions">
+    <button id="installApp" class="secondary">Sprawdź i zainstaluj StrongNew</button>
+    <a id="openChrome" class="button chrome" hidden>Otwórz w Chrome</a>
+    <button id="openApp" class="primary" disabled>Uruchom bez instalowania</button>
+    <button id="retry" class="ghost" hidden>Sprawdź ponownie</button>
+  </div>
+  <p id="hint" class="details">Pierwsze dotknięcie uruchamia kontrolę Chrome. Właściwy instalator zostanie pokazany wyłącznie po potwierdzeniu, że StrongNew jest pełną aplikacją PWA.</p>
+  <details><summary>Diagnostyka</summary><pre id="diagnostics"></pre></details>
+</main>
+<script>
+(() => {
+  const APP_URL = 'https://jarekdymek.github.io/StrongNew/';
+  const CHROME_INTENT = 'intent://jarekdymek.github.io/StrongNew/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(APP_URL) + ';end';
+  const status = document.querySelector('#status');
+  const installApp = document.querySelector('#installApp');
+  const openChrome = document.querySelector('#openChrome');
+  const openApp = document.querySelector('#openApp');
+  const retry = document.querySelector('#retry');
+  const hint = document.querySelector('#hint');
+  const diagnostics = document.querySelector('#diagnostics');
+  const ua = navigator.userAgent || '';
+  const isAndroid = /android/i.test(ua);
+  const isWebView = /\bwv\b|;\s*wv\)|version\/4\.0.*chrome|chatgpt|fban|fbav|instagram/i.test(ua);
+  const isChrome = /chrome/i.test(ua) && !isWebView && !/edg|opr|samsungbrowser/i.test(ua);
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let registration = null;
+  let countdownId = null;
+  let verificationReady = false;
+  let verificationPromise = null;
+  let activeWorkerVersion = '';
+
+  const setStatus = (text, mode='') => { status.textContent = text; status.className = `status ${mode}`.trim(); };
+  const refreshDiagnostics = () => {
+    diagnostics.textContent = JSON.stringify({
+      version: '0.4.2',
+      secureContext: window.isSecureContext,
+      serviceWorkerSupported: 'serviceWorker' in navigator,
+      serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
+      installEventSeen: window.__strongNewInstallEventSeen,
+      activeWorkerVersion,
+      displayMode: standalone() ? 'standalone' : 'browser',
+      userAgent: ua
+    }, null, 2);
+  };
+
+  function enableRealInstall() {
+    if (!window.__strongNewInstallPrompt || standalone()) return;
+    clearInterval(countdownId);
+    installApp.disabled = false;
+    installApp.textContent = 'Zainstaluj StrongNew';
+    setStatus('Chrome potwierdził: StrongNew jest instalowalną aplikacją PWA.', 'ready');
+    hint.textContent = 'Naciśnij przycisk ponownie. Pojawi się systemowe okno instalacji Chrome, nie opcja tworzenia skrótu.';
+    refreshDiagnostics();
+  }
+
+  window.addEventListener('strongnew-install-ready', enableRealInstall);
+  window.addEventListener('appinstalled', () => {
+    window.__strongNewInstallPrompt = null;
+    installApp.disabled = true;
+    installApp.textContent = 'StrongNew zainstalowany';
+    setStatus('Instalacja zakończona.', 'installed');
+    hint.textContent = 'Aplikację znajdziesz na ekranie głównym lub liście aplikacji.';
+    refreshDiagnostics();
+  });
+
+  if (standalone()) {
+    location.replace('./app.html');
+    return;
+  }
+
+  if (isAndroid && !isChrome) {
+    openChrome.hidden = false;
+    openChrome.href = CHROME_INTENT;
+    setStatus('Instalacja PWA wymaga pełnej przeglądarki Chrome.', 'error');
+    hint.textContent = 'Naciśnij „Otwórz w Chrome”. Nie wybieraj opcji tworzącej zwykły skrót.';
+  }
+
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function queryWorkerVersion(timeout = 350) {
+    const worker = navigator.serviceWorker.controller || registration?.active;
+    if (!worker) return '';
+    return new Promise(resolve => {
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => resolve(''), timeout);
+      channel.port1.onmessage = event => {
+        clearTimeout(timer);
+        resolve(String(event.data?.version || ''));
+      };
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    });
+  }
+
+  async function ensureCurrentWorker() {
+    const expected = '0.4.2';
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      activeWorkerVersion = await queryWorkerVersion();
+      refreshDiagnostics();
+      if (activeWorkerVersion === expected) return;
+      registration = await navigator.serviceWorker.getRegistration('./') || registration;
+      if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      if (attempt % 8 === 0) await registration?.update();
+      await delay(250);
+    }
+    throw new Error(`Aktywny service worker ma wersję ${activeWorkerVersion || 'nieznaną'}, oczekiwano 0.4.2.`);
+  }
+
+  async function verify() {
+    retry.hidden = true;
+    registration = await window.__strongNewSw;
+    await registration.update();
+    registration = await navigator.serviceWorker.ready;
+
+    if (!navigator.serviceWorker.controller) {
+      const reloaded = sessionStorage.getItem('strongnew-sw-reloaded');
+      if (!reloaded) {
+        sessionStorage.setItem('strongnew-sw-reloaded', '1');
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, 1800);
+          navigator.serviceWorker.addEventListener('controllerchange', () => { clearTimeout(timer); resolve(); }, { once: true });
+        });
+        location.reload();
+        return;
+      }
+    }
+
+    await ensureCurrentWorker();
+    verificationReady = true;
+    openApp.disabled = false;
+    refreshDiagnostics();
+    if (window.__strongNewInstallPrompt) {
+      enableRealInstall();
+      return;
+    }
+
+    if (!(isAndroid && !isChrome)) {
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź i zainstaluj StrongNew';
+      setStatus('Tryb offline jest gotowy. Naciśnij przycisk, aby Chrome rozpoczął kontrolę instalacji.', 'ready');
+    }
+  }
+
+  async function beginInstallCheck() {
+    if (standalone()) return;
+    if (isAndroid && !isChrome) {
+      location.href = CHROME_INTENT;
+      return;
+    }
+
+    if (!verificationReady) {
+      installApp.disabled = true;
+      installApp.textContent = 'Kończę przygotowanie offline…';
+      await verificationPromise;
+    }
+
+    if (window.__strongNewInstallPrompt) {
+      await showRealInstallPrompt();
+      return;
+    }
+
+    clearInterval(countdownId);
+    let remaining = 40;
+    installApp.disabled = true;
+    installApp.textContent = `Chrome sprawdza aplikację… ${remaining} s`;
+    setStatus('Trwa kontrola instalowalności Chrome. Pozostań na tej stronie; pierwsze dotknięcie spełnia wymaganie interakcji użytkownika.');
+    hint.textContent = 'Przycisk instalacji zostanie odblokowany tylko po odebraniu prawdziwego zdarzenia beforeinstallprompt.';
+    countdownId = setInterval(() => {
+      if (window.__strongNewInstallPrompt) {
+        enableRealInstall();
+        return;
+      }
+      remaining -= 1;
+      installApp.textContent = `Chrome sprawdza aplikację… ${remaining} s`;
+      if (remaining > 0) return;
+      clearInterval(countdownId);
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź ponownie';
+      retry.hidden = false;
+      setStatus('Chrome nie zwrócił systemowego instalatora PWA. Instalacja pozostaje zablokowana, aby nie utworzyć zwykłego skrótu.', 'error');
+      hint.textContent = 'Sprawdź, czy strona jest otwarta w aktualnym Google Chrome i czy wcześniejsza wersja StrongNew nie jest już zainstalowana.';
+      refreshDiagnostics();
+    }, 1000);
+  }
+
+  async function showRealInstallPrompt() {
+    const prompt = window.__strongNewInstallPrompt;
+    if (!prompt) return;
+    installApp.disabled = true;
+    installApp.textContent = 'Otwieranie instalatora Chrome…';
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
+    window.__strongNewInstallPrompt = null;
+    if (choice.outcome !== 'accepted') {
+      installApp.disabled = false;
+      installApp.textContent = 'Sprawdź ponownie';
+      setStatus('Instalacja została anulowana w systemowym oknie Chrome.', 'error');
+    }
+    refreshDiagnostics();
+  }
+
+  installApp.addEventListener('click', () => beginInstallCheck().catch(fail));
+
+  openApp.addEventListener('click', () => location.href = './app.html');
+  retry.addEventListener('click', () => verify().catch(fail));
+  function fail(error) {
+    installApp.disabled = true;
+    retry.hidden = false;
+    setStatus(`Walidacja PWA nie powiodła się: ${error?.message || error}`, 'error');
+    refreshDiagnostics();
+  }
+
+  refreshDiagnostics();
+  verificationPromise = verify().catch(error => {
+    fail(error);
+    throw error;
+  });
+})();
+</script>
+</body>
+</html>
