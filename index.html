@@ -77,7 +77,7 @@
       progress.value = progress.max;
       setStatus('Aplikacja jest gotowa i zapisana do pracy offline.', 'ready');
       openApp.disabled = false;
-      installApp.disabled = standalone() ? true : !deferredPrompt;
+      installApp.disabled = standalone();
       installApp.textContent = standalone() ? 'Aplikacja zainstalowana' : 'Zainstaluj aplikację';
       retry.hidden = true;
       hint.textContent = standalone()
