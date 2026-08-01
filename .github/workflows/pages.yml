@@ -1,0 +1,82 @@
+name: Deploy StrongNew to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: strongnew-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check application files
+        id: gate
+        shell: bash
+        run: |
+          if [[ -f index.html && -f manifest.json && -f sw.js ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Application has not been bootstrapped yet."
+          fi
+
+      - name: Run tests
+        if: steps.gate.outputs.ready == 'true'
+        run: npm test
+
+      - name: Configure GitHub Pages
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Prepare static site
+        if: steps.gate.outputs.ready == 'true'
+        shell: bash
+        run: |
+          SITE="$RUNNER_TEMP/site"
+          mkdir -p "$SITE"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='tests/' \
+            --exclude='scripts/' \
+            --exclude='package.json' \
+            --exclude='README.md' \
+            --exclude='.bootstrap-complete' \
+            ./ "$SITE/"
+
+      - name: Upload Pages artifact
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    if: needs.build.outputs.ready == 'true'
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
