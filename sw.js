@@ -1,9 +1,9 @@
-const VERSION = '0.4.1';
+const VERSION = '0.4.2';
 const SOURCE_COMMIT = '298be6317c4ac3c3d61b5862ab556691e0eaa24d';
 const SOURCE_BASE = `https://raw.githubusercontent.com/JarekDymek/StrongNextGen/${SOURCE_COMMIT}/`;
 const SHELL_CACHE = `strongnew-shell-${VERSION}`;
 const APP_CACHE = `strongnew-app-${VERSION}-${SOURCE_COMMIT.slice(0, 8)}`;
-const SHELL_FILES = ['./', './index.html', './app.html', './manifest.json', './version.json', './icon-192.png', './icon-512.png'];
+const SHELL_FILES = ['./', './index.html', './app.html', './manifest.json', './version.json', './icon-192.png', './icon-512.png', './install-0.4.2.html'];
 const REMOTE_FILES = ['src/app.js','src/competitors.js','src/data.js','src/scoring.js','src/storage.js','src/styles.css','src/competition-rules.js','src/competitor-data.js','src/runtime.js','src/state-migration.js','assets/logo-strong-man.png'];
 const absolute = path => new URL(path, self.registration.scope).href;
 const localRequest = path => new Request(absolute(path), { method: 'GET' });
@@ -55,6 +55,14 @@ function localPath(url) {
   const scope = new URL(self.registration.scope);
   return decodeURIComponent(new URL(url).pathname.slice(scope.pathname.length)).replace(/^\/+/, '');
 }
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'GET_VERSION') {
+    event.ports?.[0]?.postMessage({ version: VERSION, sourceCommit: SOURCE_COMMIT });
+    return;
+  }
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
+});
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
