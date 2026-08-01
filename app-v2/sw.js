@@ -1,0 +1,8 @@
+const VERSION='strongnew-v1.0.0';
+const CACHE=`${VERSION}-shell`;
+const SCOPE='/StrongNew/app-v2/';
+const FILES=[SCOPE,SCOPE+'index.html',SCOPE+'manifest.webmanifest',SCOPE+'version.json',SCOPE+'app.css',SCOPE+'core.js',SCOPE+'ui.js','/StrongNew/icon-192.png','/StrongNew/icon-512.png'];
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting()));});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('strongnew-v1')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;const url=new URL(event.request.url);if(url.origin!==location.origin)return;event.respondWith((async()=>{const cache=await caches.open(CACHE);if(event.request.mode==='navigate'){try{const response=await fetch(event.request);if(response.ok)await cache.put(SCOPE+'index.html',response.clone());return response;}catch{return (await cache.match(SCOPE+'index.html'))||(await cache.match(SCOPE));}}const cached=await cache.match(event.request,{ignoreSearch:true});if(cached)return cached;try{const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;}catch{return new Response('Offline',{status:503});}})());});
+self.addEventListener('message',event=>{if(event.data?.type==='GET_VERSION')event.ports?.[0]?.postMessage({version:VERSION});if(event.data?.type==='SKIP_WAITING')self.skipWaiting();});

@@ -1,0 +1,21 @@
+{
+  "id": "/StrongNew/app-v2/strongnew-v1",
+  "name": "StrongNew — zawody Strong Man i Strong Women",
+  "short_name": "StrongNew",
+  "description": "Samodzielna aplikacja do prowadzenia i sędziowania zawodów Strong Man i Strong Women.",
+  "lang": "pl-PL",
+  "start_url": "/StrongNew/app-v2/?source=pwa-v1",
+  "scope": "/StrongNew/app-v2/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#eef3f8",
+  "theme_color": "#0b1f36",
+  "prefer_related_applications": false,
+  "categories": ["sports", "productivity"],
+  "icons": [
+    {"src":"/StrongNew/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/StrongNew/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/StrongNew/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}
