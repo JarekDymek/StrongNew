@@ -34,9 +34,15 @@ jobs:
             echo "Application has not been bootstrapped yet."
           fi
 
-      - name: Run tests
+      - name: Run tests when available
         if: steps.gate.outputs.ready == 'true'
-        run: npm test
+        shell: bash
+        run: |
+          if [[ -f package.json ]]; then
+            npm test
+          else
+            echo "No root package.json; static-site tests skipped."
+          fi
 
       - name: Configure GitHub Pages
         if: steps.gate.outputs.ready == 'true'
