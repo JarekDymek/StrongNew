@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="description" content="Strongman Speaker — bezpłatny lokalny generator reklam sponsorskich z głosem konferansjera i muzyką tła." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Strongman Speaker</title>
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div><div class="eyebrow">STRONGMAN EVENT AUDIO</div><h1>Speaker</h1></div>
+    </div>
+    <div class="status-wrap">
+      <span id="netStatus" class="status offline">OFFLINE</span>
+      <button id="installBtn" class="btn install" hidden>＋ INSTALUJ</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Nawigacja">
+    <button class="tab active studio-tab" data-view="studio"><span>🎙️</span> Studio</button>
+    <button class="tab library-tab" data-view="library"><span>💾</span> Biblioteka</button>
+    <button class="tab event-tab" data-view="event"><span>🏆</span> Tryb zawodów</button>
+  </nav>
+
+  <main>
+    <section id="studio" class="view active">
+      <div class="hero">
+        <div><div class="eyebrow">REKLAMY SPONSORÓW I MECENASÓW</div><h2>Profesjonalny głos. Muzyka. Gotowy plik.</h2><p>Wszystko generowane lokalnie — bez klucza API i bez opłat za syntezę.</p></div>
+        <div class="hero-badge">OFFLINE<br><strong>READY</strong></div>
+      </div>
+
+      <div class="workflow">
+        <article class="card card-copy">
+          <div class="card-title"><span class="step step-blue">1</span><div><div class="eyebrow blue">TEKST</div><h2>Treść sponsora</h2></div></div>
+          <div class="segmented">
+            <button id="exactMode" class="seg active">Czytaj dokładnie</button>
+            <button id="radioMode" class="seg">Wersja radiowa</button>
+          </div>
+          <label>Nazwa sponsora<input id="sponsor" placeholder="np. TEST ARENA" /></label>
+          <label>Treść reklamy<textarea id="text" rows="8" placeholder="Wpisz tekst do odczytania..."></textarea></label>
+          <label>Podpowiedź wymowy<input id="pronunciation" placeholder="np. Dajmek Bodi Lajn" /></label>
+          <div class="button-grid">
+            <button id="polishBtn" class="btn blue-btn">✨ Popraw radiowo</button>
+            <button id="openGeneratorBtn" class="btn violet-btn">⚡ Generator tekstu</button>
+          </div>
+        </article>
+
+        <article class="card card-voice">
+          <div class="card-title"><span class="step step-orange">2</span><div><div class="eyebrow orange">GŁOS</div><h2>Wybierz speakera</h2></div></div>
+          <div id="voiceGrid" class="voice-grid">
+            <button class="voice-card active" data-voice="pl_PL-darkman-medium">
+              <span class="voice-icon darkman">D</span><span><strong>Darkman</strong><small>Niski • mocny • CC0</small></span><span class="voice-ready" data-ready="pl_PL-darkman-medium">●</span>
+            </button>
+            <button class="voice-card" data-voice="pl_PL-mc_speech-medium">
+              <span class="voice-icon mc">MC</span><span><strong>MC Speech</strong><small>Konferansjer • wyraźny • CC0</small></span><span class="voice-ready" data-ready="pl_PL-mc_speech-medium">●</span>
+            </button>
+            <button class="voice-card" data-voice="pl_PL-mls_6892-low">
+              <span class="voice-icon mls">M</span><span><strong>MLS 6892</strong><small>Alternatywny • lżejszy • CC BY 4.0</small></span><span class="voice-ready" data-ready="pl_PL-mls_6892-low">●</span>
+            </button>
+          </div>
+          <div id="modelState" class="model-state">Sprawdzanie modeli…</div>
+          <div class="button-grid">
+            <button id="downloadModelBtn" class="btn orange-btn">⬇ Pobierz wybrany głos</button>
+            <button id="downloadAllBtn" class="btn slate-btn">⬇ Pobierz wszystkie</button>
+          </div>
+
+          <div class="control-row">
+            <label>Tempo <span id="speedValue" class="value-chip">0,94×</span><input id="speed" type="range" min="0.82" max="1.12" step="0.01" value="0.94" /></label>
+            <label>Charakter<select id="style"><option value="strongman" selected>Strongman — mocny</option><option value="radio">Radio — reklamowy</option><option value="arena">Arena — dynamiczny</option><option value="neutral">Neutralny</option></select></label>
+          </div>
+        </article>
+
+        <article class="card card-music">
+          <div class="card-title"><span class="step step-pink">3</span><div><div class="eyebrow pink">MUZYKA TŁA</div><h2>Reklamowy podkład</h2></div></div>
+          <div class="music-switch-row">
+            <label class="switch"><input id="musicEnabled" type="checkbox" checked><span></span></label>
+            <div><strong>Dodaj muzykę do nagrania</strong><small>Podkład jest generowany lokalnie i miksowany z głosem.</small></div>
+          </div>
+          <div class="music-presets">
+            <button class="music-card active" data-music="pulse"><span class="music-art pulse">▦</span><span><strong>Arena Pulse</strong><small>sportowy • nowoczesny • 92 BPM</small></span></button>
+            <button class="music-card" data-music="glow"><span class="music-art glow">◈</span><span><strong>Sponsor Glow</strong><small>ciepły • premium • 80 BPM</small></span></button>
+            <button class="music-card" data-music="victory"><span class="music-art victory">▲</span><span><strong>Victory Bed</strong><small>podniosły • dynamiczny • 104 BPM</small></span></button>
+          </div>
+          <label>Głośność muzyki <span id="musicVolumeValue" class="value-chip">12%</span><input id="musicVolume" type="range" min="0" max="0.26" step="0.01" value="0.12" /></label>
+          <button id="previewMusicBtn" class="btn pink-btn full">▶ ODSŁUCHAJ PODKŁAD</button>
+          <p class="muted small">Podkład proceduralny — bez użycia zewnętrznego utworu muzycznego.</p>
+        </article>
+
+        <article class="card card-export">
+          <div class="card-title"><span class="step step-green">4</span><div><div class="eyebrow green">EKSPORT</div><h2>Generuj reklamę</h2></div></div>
+          <div class="format-pills">
+            <label class="format-pill"><input type="radio" name="fmt" value="mp3" checked><span>MP3<small>mały plik</small></span></label>
+            <label class="format-pill"><input type="radio" name="fmt" value="wav"><span>WAV<small>najwyższa jakość</small></span></label>
+          </div>
+          <button id="generateBtn" class="btn generate-btn full"><span class="mic">🎙️</span><span>GENERUJ GOTOWĄ REKLAMĘ<small>głos + obróbka + muzyka</small></span></button>
+          <div id="progress" class="progress" hidden><div id="progressBar"></div></div>
+          <p id="message" class="message"></p>
+          <div class="privacy-note">🔒 Synteza odbywa się na Twoim urządzeniu. Brak kluczy API i opłat za znaki.</div>
+        </article>
+      </div>
+
+      <article id="resultCard" class="card result" hidden>
+        <div class="result-head"><div><div class="eyebrow green">GOTOWE NAGRANIE</div><h2 id="resultTitle">Reklama</h2><p id="resultMeta" class="muted small"></p></div><span id="resultDuration" class="duration">—</span></div>
+        <audio id="player" controls preload="metadata"></audio>
+        <div class="button-grid three">
+          <button id="saveBtn" class="btn green-btn">💾 Zapisz offline</button>
+          <button id="downloadBtn" class="btn blue-btn">⬇ Pobierz plik</button>
+          <button id="regenerateBtn" class="btn slate-btn">↻ Generuj ponownie</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="library" class="view">
+      <article class="card library-card">
+        <div class="library-head"><div><div class="eyebrow blue">OFFLINE</div><h2>Biblioteka reklam</h2></div><input id="search" class="search" placeholder="Szukaj sponsora..." /></div>
+        <div id="libraryList" class="library-list"></div>
+      </article>
+    </section>
+
+    <section id="event" class="view event-view">
+      <div class="event-header">
+        <div><div class="eyebrow pink">TRYB ZAWODÓW</div><h2 id="nowPlaying">Wybierz sponsora</h2><p>Duże przyciski do obsługi jedną ręką.</p></div>
+        <button id="stopBtn" class="btn danger big-stop">■ STOP</button>
+      </div>
+      <div id="eventGrid" class="event-grid"></div>
+    </section>
+  </main>
+
+  <dialog id="generatorDialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-head"><div><div class="eyebrow violet">GENERATOR TEKSTU</div><h2>Reklama sponsora</h2></div><button value="cancel" class="icon-btn">×</button></div>
+      <label>Nazwa sponsora<input id="gSponsor" /></label>
+      <label>Branża / usługa<input id="gIndustry" placeholder="np. siłownia, transport, gastronomia" /></label>
+      <label>Najważniejsze informacje<textarea id="gFacts" rows="4" placeholder="Tylko fakty, które mają znaleźć się w reklamie"></textarea></label>
+      <label>Hasło<input id="gSlogan" /></label>
+      <div class="grid two compact">
+        <label>Długość<select id="gLength"><option>10</option><option selected>15</option><option>20</option><option>30</option><option>45</option><option>60</option></select></label>
+        <label>Styl<select id="gStyle"><option value="sport">Sportowy</option><option value="premium">Premium</option><option value="direct">Konkretny</option></select></label>
+      </div>
+      <div class="button-grid">
+        <button id="templateGenerateBtn" value="cancel" class="btn violet-btn">⚡ Generuj lokalnie</button>
+        <button id="localAiBtn" value="cancel" class="btn slate-btn">AI lokalnie — opcjonalne</button>
+      </div>
+      <p class="muted small">Tryb AI pobiera lokalny model językowy. Nie używa klucza API.</p>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

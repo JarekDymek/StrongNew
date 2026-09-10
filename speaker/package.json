@@ -1,0 +1,8 @@
+{
+  "name": "strongman-speaker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first PWA for Strongman sponsor announcements",
+  "scripts": {"start":"npx serve ."},
+  "license": "MIT"
+}
